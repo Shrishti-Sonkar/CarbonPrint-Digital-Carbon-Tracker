@@ -1,0 +1,10 @@
+project_id = "kwkihwfoykkoxijdbjnd"
+
+[functions.carbonie-chat]
+verify_jwt = false
+
+[functions.carbon-intensity]
+verify_jwt = false
+
+[functions.eco-chat]
+verify_jwt = false
