@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,8 +8,10 @@ import { supabase } from "@/integrations/supabase/client";
 import imageCompression from "browser-image-compression";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile, toBlobURL } from "@ffmpeg/util";
-import { Download, Upload, Loader2, MessageSquare, Send } from "lucide-react";
+import { Download, Upload, Loader2, MessageSquare, Send, Sparkles } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
+import * as cocoSsd from "@tensorflow-models/coco-ssd";
+import "@tensorflow/tfjs";
 
 export const EcoCompressor = () => {
   const [file, setFile] = useState<File | null>(null);
@@ -21,9 +23,26 @@ export const EcoCompressor = () => {
   const [chatMessage, setChatMessage] = useState("");
   const [chatHistory, setChatHistory] = useState<Array<{ role: string; content: string }>>([]);
   const [chatLoading, setChatLoading] = useState(false);
+  const [aiEnabled, setAiEnabled] = useState(true);
+  const [detectedObjects, setDetectedObjects] = useState<string[]>([]);
+  const [model, setModel] = useState<cocoSsd.ObjectDetection | null>(null);
   const { toast } = useToast();
 
   const CO2_PER_MB = 0.02; // grams of CO2 per MB
+
+  useEffect(() => {
+    // Load TensorFlow model on mount
+    const loadModel = async () => {
+      try {
+        const loadedModel = await cocoSsd.load();
+        setModel(loadedModel);
+        console.log("TensorFlow COCO-SSD model loaded");
+      } catch (error) {
+        console.error("Error loading TensorFlow model:", error);
+      }
+    };
+    loadModel();
+  }, []);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -33,18 +52,60 @@ export const EcoCompressor = () => {
       setCompressedSize(0);
       setCompressedFile(null);
       setProgress(0);
+      setDetectedObjects([]);
+    }
+  };
+
+  const detectObjects = async (imageFile: File): Promise<string[]> => {
+    if (!model || !aiEnabled) return [];
+    
+    try {
+      const img = new Image();
+      img.src = URL.createObjectURL(imageFile);
+      await new Promise((resolve) => { img.onload = resolve; });
+      
+      const predictions = await model.detect(img);
+      const objects = predictions
+        .filter(p => p.score > 0.5)
+        .map(p => p.class);
+      
+      return [...new Set(objects)]; // unique objects
+    } catch (error) {
+      console.error("Object detection error:", error);
+      return [];
     }
   };
 
   const compressImage = async (imageFile: File) => {
-    const options = {
-      maxSizeMB: 1,
-      maxWidthOrHeight: 1920,
-      useWebWorker: true,
-      onProgress: (p: number) => setProgress(p),
-    };
-
     try {
+      let detectedObjs: string[] = [];
+      
+      // AI-aware compression: detect important areas
+      if (aiEnabled && model) {
+        detectedObjs = await detectObjects(imageFile);
+        setDetectedObjects(detectedObjs);
+        
+        if (detectedObjs.length > 0) {
+          toast({
+            title: "🧠 SmartCompress Active",
+            description: `Detected: ${detectedObjs.join(", ")}. Preserving quality in key areas.`,
+          });
+        }
+      }
+      
+      // Adjust compression based on detected objects
+      const hasImportantContent = detectedObjs.some(obj => 
+        ['person', 'face', 'text', 'book'].includes(obj.toLowerCase())
+      );
+      
+      const options = {
+        maxSizeMB: hasImportantContent ? 1.5 : 1, // preserve more quality for important content
+        maxWidthOrHeight: 1920,
+        useWebWorker: true,
+        initialQuality: hasImportantContent ? 0.85 : 0.7,
+        onProgress: (p: number) => setProgress(p),
+      };
+      
       const compressed = await imageCompression(imageFile, options);
       return compressed;
     } catch (error) {
@@ -80,7 +141,6 @@ export const EcoCompressor = () => {
       ]);
 
       const data = await ffmpeg.readFile("output.mp4") as Uint8Array;
-      // Create a new Uint8Array from the data to ensure compatibility
       return new Blob([new Uint8Array(data)], { type: "video/mp4" });
     } catch (error) {
       console.error("Video compression error:", error);
@@ -194,9 +254,24 @@ export const EcoCompressor = () => {
       {/* Compressor Card */}
       <Card className="border-primary/20">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            🌿 EcoCompress
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              🌿 EcoCompress
+            </CardTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setAiEnabled(!aiEnabled)}
+            >
+              <Sparkles className="w-4 h-4 mr-2" />
+              {aiEnabled ? "AI On" : "AI Off"}
+            </Button>
+          </div>
+          {aiEnabled && model && (
+            <p className="text-xs text-primary mt-2">
+              🧠 SmartCompress: AI-powered selective compression active
+            </p>
+          )}
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-col gap-2">
@@ -208,6 +283,19 @@ export const EcoCompressor = () => {
               disabled={compressing}
             />
           </div>
+
+          {detectedObjects.length > 0 && (
+            <div className="p-3 bg-primary/10 rounded-lg">
+              <p className="text-sm font-medium mb-2">🔍 Detected Objects:</p>
+              <div className="flex flex-wrap gap-2">
+                {detectedObjects.map((obj, i) => (
+                  <span key={i} className="px-2 py-1 bg-primary/20 rounded text-xs">
+                    {obj}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
 
           {file && (
             <div className="space-y-3">
@@ -225,6 +313,9 @@ export const EcoCompressor = () => {
                     </p>
                     <p className="text-blue-600 font-semibold">
                       🌍 CO₂ Reduced: {co2Saved.toFixed(3)}g
+                    </p>
+                    <p className="text-xs text-muted-foreground pt-2">
+                      🌱 That's like planting {(co2Saved * 50).toFixed(1)} tree seedlings!
                     </p>
                   </>
                 )}

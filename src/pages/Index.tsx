@@ -1,7 +1,6 @@
 import { Hero } from "@/components/Hero";
 import { ActivityTracker } from "@/components/ActivityTracker";
 import { LeaderboardReal } from "@/components/LeaderboardReal";
-import { Chatbot } from "@/components/Chatbot";
 import { EcoCompressor } from "@/components/EcoCompressor";
 import { WeeklyMiniChart } from "@/components/WeeklyMiniChart";
 import { CarbonIntensity } from "@/components/CarbonIntensity";
@@ -45,17 +44,22 @@ const Index = () => {
       </nav>
 
       <Hero />
-      <ActivityTracker />
       
-      {/* Real-time Carbon Data & Weekly Stats */}
-      <section className="py-8 px-4">
-        <div className="container mx-auto max-w-6xl">
-          <div className="grid md:grid-cols-2 gap-6">
-            <CarbonIntensity />
-            <WeeklyMiniChart />
-          </div>
-        </div>
-      </section>
+      {user && (
+        <>
+          <ActivityTracker />
+          
+          {/* Real-time Carbon Data & Weekly Stats */}
+          <section className="py-8 px-4">
+            <div className="container mx-auto max-w-6xl">
+              <div className="grid md:grid-cols-2 gap-6">
+                <CarbonIntensity />
+                <WeeklyMiniChart />
+              </div>
+            </div>
+          </section>
+        </>
+      )}
 
       {/* EcoCompress Feature */}
       <section className="py-12 px-4">
@@ -116,8 +120,6 @@ const Index = () => {
           </div>
         </div>
       </section>
-
-      <Chatbot />
     </div>
   );
 };

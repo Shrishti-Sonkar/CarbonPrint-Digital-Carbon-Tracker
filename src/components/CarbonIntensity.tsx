@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Zap, MapPin } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Cloud, Zap } from "lucide-react";
 
 interface CarbonIntensityData {
   intensity: number;
@@ -19,120 +20,124 @@ export const CarbonIntensity = () => {
     const fetchCarbonIntensity = async () => {
       try {
         // Get user's location
-        if (!navigator.geolocation) {
-          setLoading(false);
-          return;
-        }
-
-        navigator.geolocation.getCurrentPosition(
-          async (position) => {
-            const { latitude, longitude } = position.coords;
-
-            const { data: intensityData, error } = await supabase.functions.invoke(
-              'carbon-intensity',
-              {
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            async (position) => {
+              const { latitude, longitude } = position.coords;
+              
+              const { data: result, error } = await supabase.functions.invoke('carbon-intensity', {
                 body: { latitude, longitude }
-              }
-            );
+              });
 
-            if (error) {
-              console.error('Error fetching carbon intensity:', error);
+              if (error) throw error;
+              setData(result);
               setLoading(false);
-              return;
+            },
+            (error) => {
+              console.error("Geolocation error:", error);
+              // Fallback to default location (India)
+              fetchDefaultData();
             }
-
-            if (intensityData) {
-              setData(intensityData);
-            }
-            setLoading(false);
-          },
-          (error) => {
-            console.error('Geolocation error:', error);
-            setLoading(false);
-          }
-        );
+          );
+        } else {
+          fetchDefaultData();
+        }
       } catch (error) {
-        console.error('Error:', error);
-        toast.error("Couldn't fetch carbon intensity data");
+        console.error("Error fetching carbon intensity:", error);
         setLoading(false);
       }
+    };
+
+    const fetchDefaultData = async () => {
+      const { data: result, error } = await supabase.functions.invoke('carbon-intensity', {
+        body: { latitude: 20.5937, longitude: 78.9629 } // India center
+      });
+      if (!error) setData(result);
+      setLoading(false);
     };
 
     fetchCarbonIntensity();
   }, []);
 
+  const getIntensityLevel = (intensity: number) => {
+    if (intensity < 150) return { label: "Clean", color: "from-green-500/20 to-emerald-500/20", glow: "shadow-green-500/50", textColor: "text-green-400" };
+    if (intensity < 400) return { label: "Moderate", color: "from-orange-500/20 to-amber-500/20", glow: "shadow-orange-500/50", textColor: "text-orange-400" };
+    return { label: "High", color: "from-red-500/20 to-rose-500/20", glow: "shadow-red-500/50", textColor: "text-red-400" };
+  };
+
   if (loading) {
     return (
-      <Card className="animate-pulse">
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Zap className="w-5 h-5" />
-            Grid Carbon Intensity
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="h-20 bg-muted rounded"></div>
-        </CardContent>
+      <Card className="p-6">
+        <Skeleton className="h-8 w-32 mb-4" />
+        <Skeleton className="h-20 w-full mb-2" />
+        <Skeleton className="h-4 w-full" />
       </Card>
     );
   }
 
-  if (!data) {
-    return null;
-  }
-
-  const getIntensityLevel = (intensity: number) => {
-    if (intensity < 100) return { label: "Very Low", color: "text-green-600" };
-    if (intensity < 250) return { label: "Low", color: "text-lime-600" };
-    if (intensity < 500) return { label: "Moderate", color: "text-yellow-600" };
-    if (intensity < 750) return { label: "High", color: "text-orange-600" };
-    return { label: "Very High", color: "text-red-600" };
-  };
+  if (!data) return null;
 
   const level = getIntensityLevel(data.intensity);
 
   return (
-    <Card className="hover:shadow-lg transition-shadow duration-300">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-lg flex items-center gap-2">
-          <Zap className="w-5 h-5 text-primary" />
-          Grid Carbon Intensity
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-3">
-          <div className="flex items-baseline gap-2">
-            <span className={`text-3xl font-bold ${level.color}`}>
+    <Card className="p-6 relative overflow-hidden">
+      {/* Carbon Shadow Effect */}
+      <motion.div
+        className={`absolute inset-0 bg-gradient-to-br ${level.color} opacity-30 blur-3xl`}
+        animate={{
+          scale: [1, 1.1, 1],
+          opacity: [0.3, 0.5, 0.3],
+        }}
+        transition={{
+          duration: 3,
+          repeat: Infinity,
+          ease: "easeInOut",
+        }}
+      />
+      
+      <div className="relative z-10">
+        <div className="flex items-center gap-2 mb-4">
+          <Cloud className="w-5 h-5 text-primary" />
+          <h3 className="text-lg font-semibold">Carbon Shadow</h3>
+        </div>
+
+        <motion.div
+          className={`p-6 rounded-xl bg-card/50 backdrop-blur-sm border-2 ${level.glow} shadow-lg`}
+          animate={{
+            boxShadow: [
+              `0 0 20px rgba(${level.color.includes('green') ? '34, 197, 94' : level.color.includes('orange') ? '249, 115, 22' : '239, 68, 68'}, 0.3)`,
+              `0 0 40px rgba(${level.color.includes('green') ? '34, 197, 94' : level.color.includes('orange') ? '249, 115, 22' : '239, 68, 68'}, 0.6)`,
+              `0 0 20px rgba(${level.color.includes('green') ? '34, 197, 94' : level.color.includes('orange') ? '249, 115, 22' : '239, 68, 68'}, 0.3)`,
+            ],
+          }}
+          transition={{
+            duration: 2,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+        >
+          <div className="flex items-baseline gap-2 mb-2">
+            <span className={`text-4xl font-bold ${level.textColor}`}>
               {Math.round(data.intensity)}
             </span>
             <span className="text-sm text-muted-foreground">{data.units}</span>
           </div>
           
-          <div className="flex items-center gap-2 text-sm">
-            <span className={`font-medium ${level.color}`}>{level.label}</span>
-            <span className="text-muted-foreground">•</span>
-            <MapPin className="w-3 h-3 text-muted-foreground" />
-            <span className="text-muted-foreground">{data.country}</span>
+          <div className="flex items-center gap-2 mb-3">
+            <Zap className={`w-4 h-4 ${level.textColor}`} />
+            <span className={`font-semibold ${level.textColor}`}>{level.label} Energy</span>
           </div>
 
-          <div className="pt-2 border-t border-border">
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Fossil fuel</span>
-              <span className="font-medium">{data.fossilFuelPercentage}%</span>
-            </div>
-            <div className="mt-2 h-2 bg-muted rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-gradient-to-r from-orange-500 to-red-500 transition-all duration-500"
-                style={{ width: `${data.fossilFuelPercentage}%` }}
-              />
-            </div>
+          <div className="space-y-1 text-sm text-muted-foreground">
+            <p>📍 Region: {data.country}</p>
+            <p>⚡ Fossil Fuels: {Math.round(data.fossilFuelPercentage)}%</p>
           </div>
+        </motion.div>
 
-          <p className="text-xs text-muted-foreground pt-2">
-            Your digital emissions are powered by this grid. Lower intensity = cleaner energy! ⚡🌱
-          </p>
-        </div>
-      </CardContent>
+        <p className="text-xs text-muted-foreground mt-4">
+          Real-time grid carbon intensity in your region. Lower is better! 🌍
+        </p>
+      </div>
     </Card>
   );
 };
