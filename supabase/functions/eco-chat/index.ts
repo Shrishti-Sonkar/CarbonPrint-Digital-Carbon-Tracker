@@ -34,14 +34,14 @@ Keep responses concise (2-3 sentences max) and celebrate small wins!`;
       systemPrompt += `\n\nContext: The user just compressed a file and saved ${savedData}MB of data, reducing their carbon footprint by ${co2Saved}g CO₂. Celebrate this achievement and provide relevant eco-facts!`;
     }
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${openAIApiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'openai/gpt-4o-mini',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: message }
